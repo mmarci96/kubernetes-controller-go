@@ -11,7 +11,7 @@ RUN npm run build
 FROM golang:1.24.3-alpine AS build-proxy
 WORKDIR /build
 RUN apk add --no-cache git
-COPY ./proxy/go.mod ./
+COPY ./proxy/go.mod ./proxy/go.sum ./
 RUN go mod download
 COPY ./proxy/ .
 COPY --from=app-build /app/dist ./static/game

@@ -1,0 +1,39 @@
+# https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: server-test
+  namespace: game-test 
+  labels:
+    app: server-test
+spec:
+  selector:
+    matchLabels:
+      app: server-test
+  replicas: 3
+  template:
+    metadata:
+      labels:
+        app: server-test
+    spec:
+      containers:
+      - name: server-test
+        image: mmarci96/game-server-test:latest
+        ports:
+        - containerPort: 8080
+---
+
+# https://kubernetes.io/docs/concepts/services-networking/service/
+apiVersion: v1
+kind: Service
+metadata:
+  name: server-test
+  namespace: game-test
+spec:
+  selector:
+    app: server-test
+  ports:
+    - port: 8080
+      targetPort: 8080
+---
+
