@@ -3,7 +3,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: proxy
-  namespace: game-test 
+  namespace: game-test
   labels:
     app: proxy
 spec:
@@ -22,7 +22,6 @@ spec:
           ports:
             - containerPort: 80
 ---
-
 # https://kubernetes.io/docs/concepts/services-networking/service/
 apiVersion: v1
 kind: Service
@@ -34,32 +33,30 @@ spec:
     app: proxy
   type: NodePort
   ports:
-  - port: 80
-    targetPort: 80
-    nodePort: 30080
+    - port: 80
+      targetPort: 80
+      nodePort: 30080
 ---
-
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: proxy-rolebinding
-  namespace: game-test 
+  namespace: game-test
 subjects:
-- kind: ServiceAccount
-  name: default   
-  namespace: game-test 
+  - kind: ServiceAccount
+    name: default
+    namespace: game-test
 roleRef:
   kind: Role
   name: proxy-role
   apiGroup: rbac.authorization.k8s.io
 ---
-
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   namespace: game-test
   name: proxy-role
 rules:
-- apiGroups: ["discovery.k8s.io"]
-  resources: ["endpointslices"]
-  verbs: ["get", "list", "watch"]
+  - apiGroups: ["discovery.k8s.io"]
+    resources: ["endpointslices"]
+    verbs: ["get", "list", "watch"]

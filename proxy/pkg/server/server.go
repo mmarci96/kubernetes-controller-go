@@ -17,7 +17,9 @@ func Run() error {
 	homeApp := SpaHandler{StaticDir: "./static/client/dist"}
 	http.Handle("/game/", gameApp)
 	http.Handle("/", homeApp)
-	if err := http.ListenAndServe("0.0.0.0:8000", nil); err != nil {
+	hostUrl := "0.0.0.0:8000"
+	fmt.Println("Starting server on: ", hostUrl)
+	if err := http.ListenAndServe(hostUrl, nil); err != nil {
 		return fmt.Errorf("error starting server: %v", err)
 	}
 	return nil

@@ -11,70 +11,108 @@ import (
 
 	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
 func WatchEndpointSlices() {
+	fmt.Println("[DEBUG] Loading Kubernetes config...")
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		fmt.Println("No clusterconfig. Attemting to load from kube config...")
+		fmt.Println("[DEBUG] No in-cluster config, trying local kubeconfig...")
 		config, err = clientcmd.BuildConfigFromFlags("", filepath.Join(os.Getenv("HOME"), ".kube", "config"))
 		if err != nil {
-			log.Fatalf("Failed to build kube config: %v", err)
+			log.Fatalf("[FATAL] Failed to load kubeconfig: %v", err)
 		}
 	}
+	fmt.Println("[DEBUG] Kubernetes config loaded successfully.")
 
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		log.Fatalf("Failed to build kube config: %v", err)
+		log.Fatalf("[FATAL] Failed to create Kubernetes client: %v", err)
 	}
+	fmt.Println("[DEBUG] Kubernetes client created.")
 
-	watch, err := clientset.DiscoveryV1().EndpointSlices("game-test").Watch(context.TODO(), metav1.ListOptions{
+	// First: LIST existing EndpointSlices
+	fmt.Println("[DEBUG] Listing existing EndpointSlices...")
+	list, err := clientset.DiscoveryV1().EndpointSlices("game-test").List(context.TODO(), metav1.ListOptions{
 		LabelSelector: "app=server-test",
 	})
 	if err != nil {
-		log.Fatalf("Failed to build kube config: %v", err)
+		log.Fatalf("[FATAL] Failed to list EndpointSlices: %v", err)
 	}
 
-	for event := range watch.ResultChan() {
-		es, ok := event.Object.(*discoveryv1.EndpointSlice)
-
-		if len(es.Endpoints) == 0 {
-			fmt.Println("No endpoints found yet")
+	if len(list.Items) == 0 {
+		fmt.Println("[DEBUG] No EndpointSlices found on initial list!")
+	} else {
+		fmt.Printf("[DEBUG] Found %d EndpointSlices on initial list.\n", len(list.Items))
+		for _, es := range list.Items {
+			processEndpointSlice(&es)
 		}
+	}
+
+	// Then: WATCH for changes
+	fmt.Println("[DEBUG] Starting watch for EndpointSlices...")
+	watchInterface, err := clientset.DiscoveryV1().EndpointSlices("game-test").Watch(context.TODO(), metav1.ListOptions{
+		LabelSelector: "app=server-test",
+	})
+	if err != nil {
+		log.Fatalf("[FATAL] Failed to start watch on EndpointSlices: %v", err)
+	}
+
+	for event := range watchInterface.ResultChan() {
+		fmt.Printf("[DEBUG] Watch event received: Type=%s\n", event.Type)
+
+		es, ok := event.Object.(*discoveryv1.EndpointSlice)
 		if !ok {
-			fmt.Println("Unexpected type")
+			fmt.Println("[WARNING] Unexpected type in watch event.")
 			continue
 		}
 
-		for _, endpoint := range es.Endpoints {
-			for _, address := range endpoint.Addresses {
-				url := fmt.Sprintf("http://%s:8080/ping", address)
+		switch event.Type {
+		case watch.Added, watch.Modified:
+			processEndpointSlice(es)
+		case watch.Deleted:
+			fmt.Printf("[DEBUG] EndpointSlice deleted: %s\n", es.Name)
+		default:
+			fmt.Printf("[WARNING] Unknown watch event type: %s\n", event.Type)
+		}
+	}
+}
 
-				client := &http.Client{
-					Timeout: 2 * time.Second,
-				}
+func processEndpointSlice(es *discoveryv1.EndpointSlice) {
+	fmt.Printf("[DEBUG] Processing EndpointSlice: %s\n", es.Name)
 
-				resp, err := client.Get(url)
-				if err != nil {
-					fmt.Printf("Failed to ping %s: %v\n", url, err)
-					continue
-				}
+	if len(es.Endpoints) == 0 {
+		fmt.Println("[DEBUG] EndpointSlice has no endpoints yet.")
+	}
 
-				if resp != nil {
-					if cerr := resp.Body.Close(); cerr != nil {
-						fmt.Printf("Warning: failed to close response body: %v\n", cerr)
-					}
-				}
+	for _, endpoint := range es.Endpoints {
+		for _, address := range endpoint.Addresses {
+			fmt.Printf("[DEBUG] Found endpoint address: %s\n", address)
 
-				if resp.StatusCode == http.StatusOK {
-					fmt.Printf("Successfully pinged backend at %s\n", url)
-				} else {
-					fmt.Printf("Backend at %s responded with status: %d\n", url, resp.StatusCode)
+			urlStr := fmt.Sprintf("http://%s:8080/ping", address)
+			client := &http.Client{Timeout: 2 * time.Second}
+			fmt.Printf("[DEBUG] Sending GET request to %s\n", urlStr)
+
+			resp, err := client.Get(urlStr)
+			if err != nil {
+				fmt.Printf("[ERROR] Failed to ping %s: %v\n", urlStr, err)
+				continue
+			}
+
+			if resp != nil {
+				if cerr := resp.Body.Close(); cerr != nil {
+					fmt.Printf("[WARNING] Failed to close response body: %v\n", cerr)
 				}
-				fmt.Println("Backend pod IP:", address)
+			}
+
+			if resp.StatusCode == http.StatusOK {
+				fmt.Printf("[INFO] Successfully pinged backend at %s\n", urlStr)
+			} else {
+				fmt.Printf("[WARNING] Backend at %s responded with status: %d\n", urlStr, resp.StatusCode)
 			}
 		}
 	}

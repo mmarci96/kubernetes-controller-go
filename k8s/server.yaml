@@ -3,32 +3,31 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: server-test
-  namespace: game-test 
-  labels:
-    app: server-test
+  namespace: game-test
 spec:
   selector:
     matchLabels:
       app: server-test
-  replicas: 3
+  replicas: 2
   template:
     metadata:
       labels:
         app: server-test
     spec:
       containers:
-      - name: server-test
-        image: mmarci96/game-server-test:latest
-        ports:
-        - containerPort: 8080
+        - name: server-test
+          image: mmarci96/server-test:latest
+          ports:
+            - containerPort: 8080
 ---
-
 # https://kubernetes.io/docs/concepts/services-networking/service/
 apiVersion: v1
 kind: Service
 metadata:
   name: server-test
   namespace: game-test
+  labels:
+    app: server-test
 spec:
   selector:
     app: server-test
