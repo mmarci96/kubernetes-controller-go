@@ -13,6 +13,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
+	backendServices := watcher.GetBackEndServices()
+	log.Println("Backend services list logged on serving static files", backendServices)
 
 	select {}
 }
