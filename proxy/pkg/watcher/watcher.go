@@ -73,7 +73,8 @@ func WatchEndpointSlices() {
 
 		switch event.Type {
 		case watch.Added, watch.Modified:
-			processEndpointSlice(es)
+			processed := processEndpointSlice(es)
+			UpdateBackendServices(processed)
 		case watch.Deleted:
 			fmt.Printf("[DEBUG] EndpointSlice deleted: %s\n", es.Name)
 		default:
@@ -82,9 +83,9 @@ func WatchEndpointSlices() {
 	}
 }
 
-func processEndpointSlice(es *discoveryv1.EndpointSlice) {
+func processEndpointSlice(es *discoveryv1.EndpointSlice) []string {
 	fmt.Printf("[DEBUG] Processing EndpointSlice: %s\n", es.Name)
-
+	var endpoints []string
 	if len(es.Endpoints) == 0 {
 		fmt.Println("[DEBUG] EndpointSlice has no endpoints yet.")
 	}
@@ -111,9 +112,11 @@ func processEndpointSlice(es *discoveryv1.EndpointSlice) {
 
 			if resp.StatusCode == http.StatusOK {
 				fmt.Printf("[INFO] Successfully pinged backend at %s\n", urlStr)
+				endpoints = append(endpoints, address)
 			} else {
 				fmt.Printf("[WARNING] Backend at %s responded with status: %d\n", urlStr, resp.StatusCode)
 			}
 		}
 	}
+	return endpoints
 }
