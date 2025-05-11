@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+
+	"github.com/mmarci96/kubernetes-controller-go/proxy/pkg/watcher"
 )
 
 type SpaHandler struct {
@@ -26,6 +28,8 @@ func Run() error {
 }
 
 func (h SpaHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	backendServices := watcher.GetBackEndServices()
+	fmt.Print("Backend services list logged on serving static files", backendServices)
 	path := strings.TrimPrefix(r.URL.Path, h.RoutePrefix)
 	fs := http.Dir(h.StaticDir)
 	fileServer := http.FileServer(fs)

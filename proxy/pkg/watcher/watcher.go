@@ -49,7 +49,8 @@ func WatchEndpointSlices() {
 	} else {
 		fmt.Printf("[DEBUG] Found %d EndpointSlices on initial list.\n", len(list.Items))
 		for _, es := range list.Items {
-			processEndpointSlice(&es)
+			initial := processEndpointSlice(&es)
+			UpdateBackendServices(initial)
 		}
 	}
 
