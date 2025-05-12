@@ -18,6 +18,8 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+var _ watch.Interface
+
 var (
 	gameServers []string
 	mu          sync.RWMutex
@@ -76,7 +78,7 @@ func WatchEndpointSlices() {
 		log.Fatalf("[FATAL] Failed to start watch on EndpointSlices: %v", err)
 	}
 
-	for event := range watchInterface.ResultChan() {
+	for range watchInterface.ResultChan() {
 		list, err := clientset.DiscoveryV1().EndpointSlices("game-test").List(context.TODO(), metav1.ListOptions{LabelSelector: "app=server-test"})
 		if err != nil {
 			log.Printf("[ERROR] Failed to re-list EndpointSlices: %v", err)

@@ -12,7 +12,10 @@ document.getElementById("connectBtn").addEventListener("click", async () => {
     }
 
     try {
-        socket = io(); // Connect to server
+        socket = io("/", {
+            path: "/socket.io",
+            query: { gameId, playerId },
+        });
         socket.on("connect", () => {
             console.log("Connected with ID:", socket.id);
             document.getElementById("status").innerText =
