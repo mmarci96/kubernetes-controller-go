@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	discoveryv1 "k8s.io/api/discovery/v1"
@@ -16,6 +17,23 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
+
+var (
+	gameServers []string
+	mu          sync.RWMutex
+)
+
+func UpdateGameServers(newServices []string) {
+	mu.Lock()
+	defer mu.Unlock()
+	gameServers = newServices
+}
+
+func GetGameServers() []string {
+	mu.RLock()
+	defer mu.RUnlock()
+	return gameServers
+}
 
 func WatchEndpointSlices() {
 	fmt.Println("[DEBUG] Loading Kubernetes config...")
@@ -43,18 +61,13 @@ func WatchEndpointSlices() {
 	if err != nil {
 		log.Fatalf("[FATAL] Failed to list EndpointSlices: %v", err)
 	}
-
-	if len(list.Items) == 0 {
-		fmt.Println("[DEBUG] No EndpointSlices found on initial list!")
-	} else {
-		fmt.Printf("[DEBUG] Found %d EndpointSlices on initial list.\n", len(list.Items))
-		for _, es := range list.Items {
-			initial := processEndpointSlice(&es)
-			UpdateBackendServices(initial)
-		}
+	var initialEndpoints []string
+	for _, es := range list.Items {
+		eps := processEndpointSlice(&es)
+		initialEndpoints = append(initialEndpoints, eps...)
 	}
+	UpdateGameServers(initialEndpoints)
 
-	// Then: WATCH for changes
 	fmt.Println("[DEBUG] Starting watch for EndpointSlices...")
 	watchInterface, err := clientset.DiscoveryV1().EndpointSlices("game-test").Watch(context.TODO(), metav1.ListOptions{
 		LabelSelector: "app=server-test",
@@ -64,23 +77,17 @@ func WatchEndpointSlices() {
 	}
 
 	for event := range watchInterface.ResultChan() {
-		fmt.Printf("[DEBUG] Watch event received: Type=%s\n", event.Type)
-
-		es, ok := event.Object.(*discoveryv1.EndpointSlice)
-		if !ok {
-			fmt.Println("[WARNING] Unexpected type in watch event.")
+		list, err := clientset.DiscoveryV1().EndpointSlices("game-test").List(context.TODO(), metav1.ListOptions{LabelSelector: "app=server-test"})
+		if err != nil {
+			log.Printf("[ERROR] Failed to re-list EndpointSlices: %v", err)
 			continue
 		}
-
-		switch event.Type {
-		case watch.Added, watch.Modified:
-			processed := processEndpointSlice(es)
-			UpdateBackendServices(processed)
-		case watch.Deleted:
-			fmt.Printf("[DEBUG] EndpointSlice deleted: %s\n", es.Name)
-		default:
-			fmt.Printf("[WARNING] Unknown watch event type: %s\n", event.Type)
+		var currentGameServers []string
+		for _, es := range list.Items {
+			eps := processEndpointSlice(&es)
+			currentGameServers = append(currentGameServers, eps...)
 		}
+		UpdateGameServers(currentGameServers)
 	}
 }
 
